@@ -1,0 +1,3 @@
+experiment,experiment_group,users,total_treated_users,treatment_perc,average,t_stat,p_value
+publisher_update,control_group,1746,2595,0.673,3.316,0.000,1.0
+publisher_update,test_group,849,2595,0.327,4.1,6.068,0.0

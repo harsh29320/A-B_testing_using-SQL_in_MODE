@@ -1,0 +1,7 @@
+SELECT DATE_TRUNC('month', users.activated_at) as months,
+      COUNT(CASE WHEN exp.experiment_group = 'control_group' THEN 1 ELSE NULL END) AS control_users,
+      COUNT(CASE WHEN exp.experiment_group = 'test_group' THEN 1 ELSE NULL END) AS test_users
+FROM tutorial.yammer_experiments exp
+JOIN tutorial.yammer_users users
+ON exp.user_id = users.user_id
+GROUP BY 1

@@ -1,0 +1,58 @@
+SELECT final.experiment,
+       final.experiment_group,
+       final.users,
+       final.total_treated_users,
+       ROUND(final.users / final.total_treated_users, 3) AS treatment_perc,
+       ROUND(final.average, 3)::FLOAT AS average,
+       ROUND((final.average - final.control_average)/
+        SQRT((final.variance/final.users) + (final.control_variance/final.control_users)),3) AS t_stat,
+       (1- COALESCE(nd.value,1))*2 AS p_value
+FROM(/* calculating stats for final comparison */
+SELECT *,
+      MAX(CASE WHEN control.experiment_group ='control_group' THEN control.users ELSE NULL END) OVER () AS control_users,
+      MAX(CASE WHEN control.experiment_group ='control_group' THEN control.total ELSE NULL END) OVER () AS control_total,
+      MAX(CASE WHEN control.experiment_group ='control_group' THEN control.average ELSE NULL END) OVER () AS control_average,
+      MAX(CASE WHEN control.experiment_group ='control_group' THEN control.stdev ELSE NULL END) OVER () AS control_stdev,
+      MAX(CASE WHEN control.experiment_group ='control_group' THEN control.variance ELSE NULL END) OVER () AS control_variance,
+      SUM(control.users) OVER () AS total_treated_users
+FROM(/* selecting statistics for control group from com as control*/
+SELECT com.experiment,
+       com.experiment_group,
+       COUNT(com.user_id) AS users,
+       SUM(com.metric) AS total,
+       AVG(com.metric) AS average,
+       STDDEV(com.metric) as stdev,
+       VARIANCE(com.metric) as variance
+  FROM (/* sub query to join tables users, events and experiments using user id
+  and selecting events that occured after experiment and before July 1, 2014*/
+    SELECT exp.user_id,
+      exp.experiment,
+      exp.experiment_group,
+      exp.device,
+      users.activated_at,
+      COUNT(CASE WHEN eve.event_name= 'login' THEN 1 ELSE NULL END) AS metric
+    FROM(/* sub query to select all the experiment related to pulisher_update */
+    SELECT user_id,
+        occurred_at,
+        experiment,
+        experiment_group,
+        device
+     FROM tutorial.yammer_experiments 
+     WHERE experiment = 'publisher_update')exp
+  JOIN tutorial.yammer_users users
+  ON exp.user_id = users.user_id
+  JOIN tutorial.yammer_events eve
+  ON exp.user_id = eve.user_id
+/* condition when event occured after experiment occured)  */
+  AND eve.occurred_at >= exp.occurred_at
+/* only checking events before july */
+  AND eve.occurred_at < '2014-07-01'
+/* choosing only events when the site was used */
+  AND eve.event_type = 'engagement'
+
+  GROUP BY 1,2,3,4,5) com
+GROUP BY 1,2) control
+     )final
+     
+     LEFT JOIN benn.normal_distribution nd
+     ON nd.score = ABS(ROUND((final.average - final.control_average)/SQRT((final.variance/final.users) + (final.control_variance/final.control_users)),3))
